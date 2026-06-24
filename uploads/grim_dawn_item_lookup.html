@@ -1,0 +1,586 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+.wrap { padding: 1rem 0; }
+.search-bar { display: flex; gap: 8px; margin-bottom: 12px; }
+.search-bar input { flex: 1; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.filters select { font-size: 13px; padding: 6px 10px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); cursor: pointer; }
+.tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.tag { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--color-background-info); color: var(--color-text-info); display: flex; align-items: center; gap: 4px; cursor: pointer; border: none; }
+.tag i { font-size: 11px; }
+.stat-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.chip { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-secondary); color: var(--color-text-secondary); cursor: pointer; transition: all 0.1s; }
+.chip:hover { border-color: var(--color-border-primary); color: var(--color-text-primary); }
+.chip.active { background: var(--color-background-info); color: var(--color-text-info); border-color: transparent; }
+.results-meta { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 10px; }
+.result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.result-table th { text-align: left; padding: 8px 10px; border-bottom: 0.5px solid var(--color-border-secondary); color: var(--color-text-secondary); font-weight: 500; font-size: 12px; white-space: nowrap; }
+.result-table td { padding: 8px 10px; border-bottom: 0.5px solid var(--color-border-tertiary); vertical-align: top; color: var(--color-text-primary); }
+.result-table tr:last-child td { border-bottom: none; }
+.result-table tr:hover td { background: var(--color-background-secondary); }
+.badge { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 99px; white-space: nowrap; }
+.badge-aug-weapon { background: #E6F1FB; color: #0C447C; }
+.badge-aug-accessory { background: #EAF3DE; color: #27500A; }
+.badge-aug-armor { background: #EEEDFE; color: #3C3489; }
+.badge-comp-common { background: #FAEEDA; color: #633806; }
+.badge-comp-rare { background: #FAECE7; color: #712B13; }
+.match-stat { color: var(--color-text-info); font-weight: 500; }
+.no-results { text-align: center; padding: 2rem; color: var(--color-text-secondary); font-size: 14px; }
+.section-divider { font-size: 11px; color: var(--color-text-tertiary); padding: 6px 10px; background: var(--color-background-secondary); border-bottom: 0.5px solid var(--color-border-tertiary); font-weight: 500; letter-spacing: 0.03em; }
+</style>
+
+<div class="wrap">
+<h2 class="sr-only">Grim Dawn augment and component lookup tool — search by stat to find matching items</h2>
+
+<div class="search-bar">
+  <input type="text" id="searchInput" placeholder="Search stats, names, factions… e.g. poison resist" oninput="doSearch()" />
+  <button onclick="clearAll()" style="white-space:nowrap"><i class="ti ti-x" aria-hidden="true"></i> Clear</button>
+</div>
+
+<div style="font-size:12px; color:var(--color-text-secondary); margin-bottom:8px;">Quick stat filters — click to add:</div>
+<div class="stat-chips" id="quickChips"></div>
+
+<div style="font-size:12px; color:var(--color-text-secondary); margin-bottom:8px;">Active filters:</div>
+<div class="tag-row" id="tagRow"><span style="font-size:12px;color:var(--color-text-tertiary);">None</span></div>
+
+<div class="filters">
+  <select id="typeFilter" onchange="doSearch()">
+    <option value="">All types</option>
+    <option value="aug-weapon">Augment – Weapon</option>
+    <option value="aug-accessory">Augment – Accessory</option>
+    <option value="aug-armor">Augment – Armor</option>
+    <option value="comp-common">Component – Common</option>
+    <option value="comp-rare">Component – Rare</option>
+  </select>
+  <select id="slotFilter" onchange="doSearch()">
+    <option value="">All slots</option>
+    <option value="weapon">Weapons</option>
+    <option value="ring">Rings</option>
+    <option value="amulet">Amulets</option>
+    <option value="head">Head</option>
+    <option value="chest">Chest</option>
+    <option value="shoulder">Shoulders</option>
+    <option value="legs">Legs</option>
+    <option value="hands">Hands</option>
+    <option value="feet">Feet</option>
+    <option value="belt">Belt</option>
+    <option value="shield">Shields</option>
+    <option value="medal">Medals</option>
+  </select>
+  <select id="sourceFilter" onchange="doSearch()">
+    <option value="">All sources</option>
+    <option value="base">Base Game</option>
+    <option value="aom">Ashes of Malmouth</option>
+    <option value="fg">Forgotten Gods</option>
+  </select>
+  <select id="levelFilter" onchange="doSearch()">
+    <option value="">Any level</option>
+    <option value="1">1+</option>
+    <option value="15">15+</option>
+    <option value="20">20+</option>
+    <option value="40">40+</option>
+    <option value="50">50+</option>
+    <option value="65">65+</option>
+    <option value="75">75+</option>
+    <option value="90">90+</option>
+  </select>
+</div>
+
+<div class="results-meta" id="resultsMeta">Showing all items</div>
+<div style="overflow-x:auto;">
+<table class="result-table" id="resultsTable">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Applies To</th>
+      <th>Stats</th>
+      <th>Source / Faction</th>
+      <th style="text-align:center">Lvl</th>
+    </tr>
+  </thead>
+  <tbody id="resultsBody"></tbody>
+</table>
+</div>
+</div>
+
+<script>
+const QUICK_STATS = [
+  "Poison & Acid Resistance","Bleeding Resistance","Vitality Resistance","Aether Resistance",
+  "Chaos Resistance","Fire Resistance","Cold Resistance","Lightning Resistance",
+  "Elemental Resistance","Pierce Resistance","Burn Damage","Electrocute Damage",
+  "Frostburn Damage","Vitality Decay","Health Regeneration","Movement Speed",
+  "Offensive Ability","Defensive Ability","Physical Damage","Fire Damage",
+  "Cold Damage","Lightning Damage","Aether Damage","Chaos Damage","Vitality Damage",
+  "Poison Damage","Acid Damage","Bleeding Damage","Pierce Damage","All Pets"
+];
+
+const ALL_ITEMS = [
+  {name:"Aether Dust",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+25% Aether Damage; +5% Damage to Aetherials; +5% Damage to Aether Corruptions",faction:"Black Legion",level:40,source:"base"},
+  {name:"Potent Aether Dust",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+60% Aether Damage; +10% Damage to Aetherials; +10% Damage to Aether Corruptions",faction:"Black Legion",level:40,source:"base"},
+  {name:"Arkovian Bonemeal",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+25% Vitality Damage; +8% Damage to Undead",faction:"Rovers",level:40,source:"base"},
+  {name:"Potent Arkovian Bonemeal",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+60% Vitality Damage; +16% Damage to Undead",faction:"Rovers",level:40,source:"base"},
+  {name:"Beast Tamer's Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"All Pets: +12% Total Damage; +4% Defensive Ability",faction:"Homestead",level:40,source:"base"},
+  {name:"Potent Beast Tamer's Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"All Pets: +28% Total Damage; +8% Defensive Ability",faction:"Homestead",level:40,source:"base"},
+  {name:"Blacksteel Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+25% Physical Damage; +25% Fire Damage; +18 Offensive Ability",faction:"Black Legion",level:40,source:"base"},
+  {name:"Potent Blacksteel Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+60% Physical Damage; +60% Fire Damage; +40 Offensive Ability",faction:"Black Legion",level:40,source:"base"},
+  {name:"Dermapteran Chitin",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"Increases Armor by 4%; 8% Pierce Resistance; 10% Reduced Stun Duration",faction:"Homestead",level:40,source:"base"},
+  {name:"Potent Dermapteran Chitin",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"Increases Armor by 8%; 16% Pierce Resistance; 20% Reduced Stun Duration",faction:"Homestead",level:40,source:"base"},
+  {name:"Manticore Venom",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"40 Poison Damage over 5s; +25% Poison Damage; +5% Damage to Chthonics",faction:"Black Legion",level:40,source:"base"},
+  {name:"Potent Manticore Venom",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"90 Poison Damage over 5s; +60% Poison Damage; +10% Damage to Chthonics",faction:"Black Legion",level:40,source:"base"},
+  {name:"Raincaller Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+25% Lightning Damage; +25% Electrocute Damage; +18 Offensive Ability",faction:"Homestead",level:40,source:"base"},
+  {name:"Potent Raincaller Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+60% Lightning Damage; +60% Electrocute Damage; +40 Offensive Ability",faction:"Homestead",level:40,source:"base"},
+  {name:"Stonetusk Hoof",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+25% Physical Damage; +25% Internal Trauma Damage; +35 Armor",faction:"Homestead",level:40,source:"base"},
+  {name:"Potent Stonetusk Hoof",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+60% Physical Damage; +60% Internal Trauma Damage; +80 Armor",faction:"Homestead",level:40,source:"base"},
+  {name:"Troll Wart Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+3% Health; +16 Health Regenerated per Second; Increases Health Regeneration by 8%",faction:"Rovers",level:40,source:"base"},
+  {name:"Potent Troll Wart Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+7% Health; +36 Health Regenerated per Second; Increases Health Regeneration by 16%",faction:"Rovers",level:40,source:"base"},
+  {name:"Voidbeast Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+25% Vitality Damage; +25% Chaos Damage; +18 Offensive Ability",faction:"Black Legion",level:40,source:"base"},
+  {name:"Potent Voidbeast Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+60% Vitality Damage; +60% Chaos Damage; +40 Offensive Ability",faction:"Black Legion",level:40,source:"base"},
+  {name:"Voidvine Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+8 Fire Damage; +25% Fire Damage; 6% Chaos Resistance",faction:"Homestead",level:40,source:"base"},
+  {name:"Potent Voidvine Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+18 Fire Damage; +60% Fire Damage; 12% Chaos Resistance",faction:"Homestead",level:40,source:"base"},
+  {name:"Winterbloom Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+25% Cold Damage; +25% Frostburn Damage; +18 Offensive Ability",faction:"Rovers",level:40,source:"base"},
+  {name:"Potent Winterbloom Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+60% Cold Damage; +60% Frostburn Damage; +40 Offensive Ability",faction:"Rovers",level:40,source:"base"},
+  {name:"Witch's Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"All Pets: +3% Offensive Ability; +6% Attack Speed",faction:"Black Legion",level:40,source:"base"},
+  {name:"Potent Witch's Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"All Pets: +6% Offensive Ability; +12% Attack Speed",faction:"Black Legion",level:40,source:"base"},
+  {name:"Arkovian Rose Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+18% Elemental Damage; +10% Elemental Resistance; +1 Energy Regen/s",faction:"Rovers",level:40,source:"base"},
+  {name:"Binding Dust",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"All Pets: +8% Health; 15% Vitality Resistance",faction:"Death's Vigil",level:40,source:"base"},
+  {name:"Blessed Ashes",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+14 Defensive Ability; 15% Fire Resistance; 15% Lightning Resistance",faction:"Kymon's Chosen",level:40,source:"base"},
+  {name:"Boneback Spine",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Pierce Damage; +25% Bleeding Damage; +20 Offensive Ability",faction:"Devil's Crossing",level:40,source:"base"},
+  {name:"Chillheart Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+35% Frostburn Damage; 15% Cold Resistance; 10% Vitality Resistance",faction:"Death's Vigil",level:40,source:"base"},
+  {name:"Conjurer's Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+20% Elemental Damage; +3% Health; All Pets: +12% Total Damage",faction:"Rovers",level:40,source:"base"},
+  {name:"Consecrated Silver",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Physical Damage; 12% Chaos Resistance; +5% Damage to Chthonics",faction:"Kymon's Chosen",level:40,source:"base"},
+  {name:"Corpsefiend Tentacle",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Vitality Damage; +25% Aether Damage; 10% Vitality Resistance",faction:"Devil's Crossing",level:40,source:"base"},
+  {name:"Divine Flame",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Fire Damage; +25% Lightning Damage; 10% Elemental Resistance",faction:"Kymon's Chosen",level:40,source:"base"},
+  {name:"Firebloom Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+35% Burn Damage; +15 Health Regen/s; +20 Offensive Ability",faction:"Kymon's Chosen",level:40,source:"base"},
+  {name:"Gazer Eye",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Lightning Damage; +25% Aether Damage; 10% Aether Resistance",faction:"Devil's Crossing",level:40,source:"base"},
+  {name:"Mortal Coil",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Cold Damage; +25% Frostburn Damage; +150 Health",faction:"Death's Vigil",level:40,source:"base"},
+  {name:"Necrotic Flesh",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Vitality Damage; +25% Vitality Decay; 15% Bleeding Resistance",faction:"Death's Vigil",level:40,source:"base"},
+  {name:"Rifthound Salts",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"All Pets: +3% Total Speed; +15% Elemental Resistance; +8% Chaos Resistance",faction:"Devil's Crossing",level:40,source:"base"},
+  {name:"Ritual Salts",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+70% Burn Damage; +70% Frostburn Damage; +70% Electrocute Damage",faction:"Death's Vigil",level:40,source:"base"},
+  {name:"Rotbloom Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Vitality Damage; +25% Chaos Damage; +3% Health",faction:"Rovers",level:40,source:"base"},
+  {name:"Slith Venom",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"15% Poison & Acid Resistance; 15% Bleeding Resistance; 210 Poison Retaliation over 5s; +10% Total Retaliation",faction:"Devil's Crossing",level:40,source:"base"},
+  {name:"Slithweed Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Poison Damage; +25% Acid Damage; +14 Defensive Ability",faction:"Rovers",level:40,source:"base"},
+  {name:"Storm Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+100 Health; +15% Lightning Resistance; 1-107 Lightning Retaliation; +10% Total Retaliation",faction:"Kymon's Chosen",level:40,source:"base"},
+  {name:"Stormtail Viper Venom",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+25% Lightning Damage; +25% Electrocute Damage; +20 Offensive Ability",faction:"Rovers",level:40,source:"base"},
+  {name:"Aetherstorm Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+35% Lightning/Aether Damage; 4% Less Damage from Aetherials; 10% Elemental Resistance",faction:"Black Legion",level:50,source:"base"},
+  {name:"Potent Aetherstorm Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+80% Lightning/Aether Damage; 8% Less Damage from Aetherials; 20% Elemental Resistance",faction:"Black Legion",level:50,source:"base"},
+  {name:"Beastlord's Calling",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"All Pets: +15% to All Damage; +5% Health; +3% Defensive Ability",faction:"Homestead",level:50,source:"base"},
+  {name:"Potent Beastlord's Calling",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"All Pets: +32% to All Damage; +10% Health; +6% Defensive Ability",faction:"Homestead",level:50,source:"base"},
+  {name:"Creed's Cunning",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+35% Elemental Damage; +200 Health; +22 Offensive Ability; +1 Energy Regen/s",faction:"Black Legion",level:50,source:"base"},
+  {name:"Potent Creed's Cunning",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+80% Elemental Damage; +440 Health; +45 Offensive Ability; +2 Energy Regen/s",faction:"Black Legion",level:50,source:"base"},
+  {name:"Essence of Ch'thon",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+35% Vitality/Chaos Damage; 15% Chance Reduced target Resistances; 8% Chaos Resistance",faction:"Black Legion",level:50,source:"base"},
+  {name:"Potent Essence of Ch'thon",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+80% Vitality/Chaos Damage; 30% Chance Reduced target Resistances; 16% Chaos Resistance",faction:"Black Legion",level:50,source:"base"},
+  {name:"Oleron's Fervor",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"10% Chance of +200% to All Damage; +35% Physical/Bleeding Damage; 10% Pierce Resistance",faction:"Black Legion",level:50,source:"base"},
+  {name:"Potent Oleron's Fervor",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"10% Chance of +500% to All Damage; +80% Physical/Bleeding Damage; 20% Pierce Resistance",faction:"Black Legion",level:50,source:"base"},
+  {name:"Outcast's Bastion",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+10 Defensive Ability; 8% Aether Resistance; 8% Chaos Resistance",faction:"The Outcast",level:50,source:"base"},
+  {name:"Potent Outcast's Bastion",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+22 Defensive Ability; 16% Aether Resistance; 16% Chaos Resistance",faction:"The Outcast",level:50,source:"base"},
+  {name:"Outcast's Deathtouch",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"10 Vitality Damage; +35% Vitality/Vitality Decay Damage; +200 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Potent Outcast's Deathtouch",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"22 Vitality Damage; +80% Vitality/Vitality Decay Damage; +440 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Outcast's Frostbite",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+35% Cold/Frostburn Damage; 3% Chance of Freeze for 2s; +200 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Potent Outcast's Frostbite",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+80% Cold/Frostburn Damage; 6% Chance of Freeze for 2s; +440 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Outcast's Inferno",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+35% Fire/Burn Damage; +200 Health; 12% Fire Resistance",faction:"The Outcast",level:50,source:"base"},
+  {name:"Potent Outcast's Inferno",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+80% Fire/Burn Damage; +440 Health; 24% Fire Resistance",faction:"The Outcast",level:50,source:"base"},
+  {name:"Outcast's Might",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+35% Physical Damage; +25% Pierce Damage; +200 Health; 8% Aether Resistance",faction:"The Outcast",level:50,source:"base"},
+  {name:"Potent Outcast's Might",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+80% Physical Damage; +60% Pierce Damage; +440 Health; 16% Aether Resistance",faction:"The Outcast",level:50,source:"base"},
+  {name:"Outcast's Riftstorm",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+35% Chaos Damage; +22 Offensive Ability; +1 Energy Regen/s; +200 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Potent Outcast's Riftstorm",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+80% Chaos Damage; +45 Offensive Ability; +2 Energy Regen/s; +440 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Outcast's Thunder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+35% Lightning/Electrocute Damage; 3% Chance of Stun for 1.5s; +200 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Potent Outcast's Thunder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+80% Lightning/Electrocute Damage; 6% Chance of Stun for 1.5s; +440 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Outcast's Venom",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"10 Acid Damage; +35% Acid/Poison Damage; +200 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Potent Outcast's Venom",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"22 Acid Damage; +80% Acid/Poison Damage; +440 Health",faction:"The Outcast",level:50,source:"base"},
+  {name:"Outcast's Wrath",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+35% Aether Damage; +200 Health; +22 Offensive Ability; +6% Damage to Aetherials",faction:"The Outcast",level:50,source:"base"},
+  {name:"Potent Outcast's Wrath",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+80% Aether Damage; +440 Health; +45 Offensive Ability; +12% Damage to Aetherials",faction:"The Outcast",level:50,source:"base"},
+  {name:"Solar Radiance",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"10 Fire Damage; +35% Fire Damage; 22 Offensive Ability; 10% Energy Absorption From Enemy Spells",faction:"Homestead",level:50,source:"base"},
+  {name:"Potent Solar Radiance",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"22 Fire Damage; +80% Fire Damage; 45 Offensive Ability; 20% Energy Absorption From Enemy Spells",faction:"Homestead",level:50,source:"base"},
+  {name:"Ulgrim's Guile",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"8 Piercing Damage; +25% Pierce Damage; +35% Cold Damage; +22 Offensive Ability",faction:"Black Legion",level:50,source:"base"},
+  {name:"Potent Ulgrim's Guile",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"18 Piercing Damage; +60% Pierce Damage; +80% Cold Damage; +45 Offensive Ability",faction:"Black Legion",level:50,source:"base"},
+  {name:"Breath of Life",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+4% Health; Increases Health Regeneration by 10%; 15% Vitality Resistance",faction:"Rovers",level:50,source:"base"},
+  {name:"Cairn's Hope",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"Increases Health/Energy Regen by 15%; +20% Constitution; 18% Bleeding Resistance",faction:"Devil's Crossing",level:50,source:"base"},
+  {name:"Empyrion's Touch",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"30 Electrocute Damage over 3s; +100% Electrocute Damage; +20 Health Regen/s; +10% Energy from Enemy Spells",faction:"Kymon's Chosen",level:50,source:"base"},
+  {name:"Infernal Dust",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"30 Burn Damage over 3s; +100% Burn Damage; +25 Offensive Ability; 12% Elemental Resistance",faction:"Kymon's Chosen",level:50,source:"base"},
+  {name:"Keeper's Binding Dust",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Vitality Damage; All Pets: 18% Vitality Resistance; 20% Reduced Stun/Freeze Duration",faction:"Death's Vigil",level:50,source:"base"},
+  {name:"Kymon's Fury",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Physical/Bleeding Damage; +2% Defensive Ability; 10% Reflected Damage Reduction",faction:"Kymon's Chosen",level:50,source:"base"},
+  {name:"Kymon's Vision",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Lightning/Electrocute Damage; +25 Offensive Ability; 12% Chaos Resistance",faction:"Kymon's Chosen",level:50,source:"base"},
+  {name:"Kymon's Will",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Fire/Burn Damage; 15% Chance of Reduced target Damage; +2% Defensive Ability",faction:"Kymon's Chosen",level:50,source:"base"},
+  {name:"Malkadarr's Chillbane",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"30 Frostburn Damage over 3s; +100% Frostburn Damage; +150 Health; +25 Offensive Ability",faction:"Death's Vigil",level:50,source:"base"},
+  {name:"Mogdrogen's Blessing",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"All Pets: +10% Crit Damage; +3% Offensive Ability; +5% Attack Speed",faction:"Rovers",level:50,source:"base"},
+  {name:"Mogdrogen's Sanctity",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+180 Health; +20 Health Regen/s; 12% Elemental Resistance; 4% Less Damage From Beasts",faction:"Rovers",level:50,source:"base"},
+  {name:"Nature's Wrath",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Acid/Poison Damage; +2% Offensive Ability",faction:"Rovers",level:50,source:"base"},
+  {name:"Overseer's Gaze",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Lightning Damage; +10% Stun Duration; +25 Offensive Ability; 15% Aether Resistance",faction:"Devil's Crossing",level:50,source:"base"},
+  {name:"Rhowan's Resolve",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Physical Damage; Increases Armor Absorption by 2%; 75 Acid Retaliation; +16% Total Retaliation",faction:"Rovers",level:50,source:"base"},
+  {name:"Rhowan's Wisdom",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Elemental Damage; +2% Spirit; +2% Casting Speed; 12% Elemental Resistance",faction:"Rovers",level:50,source:"base"},
+  {name:"Song of the Elements",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Fire/Cold Damage; 15% Elemental Resistance",faction:"Devil's Crossing",level:50,source:"base"},
+  {name:"Spirit of Vengeance",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Vitality Damage; +4% Health; 75 Vitality Retaliation; +16% Total Retaliation",faction:"Rovers",level:50,source:"base"},
+  {name:"Survivor's Ally",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"12% Elemental Resistance; All Pets: +15% All Damage; +8% Health",faction:"Devil's Crossing",level:50,source:"base"},
+  {name:"Survivor's Ingenuity",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+20% All Damage; +2% Offensive Ability; +2% Defensive Ability",faction:"Devil's Crossing",level:50,source:"base"},
+  {name:"Survivor's Perseverance",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Aether/Chaos Damage; 12% Aether Resistance; 12% Chaos Resistance",faction:"Devil's Crossing",level:50,source:"base"},
+  {name:"Survivor's Resilience",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+3% Health; +3% Shield Block Chance; +20% Shield Damage Blocked",faction:"Devil's Crossing",level:50,source:"base"},
+  {name:"Traveler's Boon",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+2% Movement Speed; 40 Armor; 10% Reduced Entrapment Duration; 15% Slow Resistance",faction:"Rovers",level:50,source:"base"},
+  {name:"Uroboruuk's Anguish",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Vitality/Chaos Damage; +200 Health; 10% Reflected Damage Reduction",faction:"Death's Vigil",level:40,source:"base"},
+  {name:"Uroboruuk's Path",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Aether Damage; +4% Health; +1.2 Energy Regen/s",faction:"Death's Vigil",level:50,source:"base"},
+  {name:"Uroboruuk's Word",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Cold/Vitality Damage; +18 Defensive Ability; 18% Bleeding Resistance",faction:"Death's Vigil",level:50,source:"base"},
+  {name:"Viloth's Bite",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"80 Poison Damage over 5s; +30% Poison Damage; 3% Chance of Confuse; 12% Vitality Resistance",faction:"Devil's Crossing",level:50,source:"base"},
+  {name:"Winter's Chill",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30% Cold/Frostburn Damage; 3% Chance of Freeze; 15% Reduced Freeze Duration",faction:"Rovers",level:50,source:"base"},
+  {name:"Bladeward Powder",type:"aug-armor",appliesTo:"All Armor",stats:"10% Pierce Resistance",faction:"Devil's Crossing",level:70,source:"base"},
+  {name:"Demonbane Powder",type:"aug-armor",appliesTo:"All Armor",stats:"7% Vitality Resistance; 7% Chaos Resistance",faction:"Kymon's Chosen",level:70,source:"base"},
+  {name:"Flameweave Powder",type:"aug-armor",appliesTo:"All Armor",stats:"7% Pierce Resistance; 10% Fire Resistance",faction:"Homestead",level:70,source:"base"},
+  {name:"Kingsguard Powder",type:"aug-armor",appliesTo:"All Armor",stats:"9% Pierce Resistance; 12% Poison & Acid Resistance",faction:"Black Legion",level:70,source:"base"},
+  {name:"Kymon's Blessing",type:"aug-armor",appliesTo:"All Armor",stats:"15% Fire Resistance",faction:"Kymon's Chosen",level:70,source:"base"},
+  {name:"Kymon's Conduit",type:"aug-armor",appliesTo:"All Armor",stats:"15% Lightning Resistance",faction:"Kymon's Chosen",level:70,source:"base"},
+  {name:"Mankind's Vigil",type:"aug-armor",appliesTo:"All Armor",stats:"9% Aether Resistance; 9% Chaos Resistance",faction:"Black Legion",level:70,source:"base"},
+  {name:"Mogdrogen's Touch",type:"aug-armor",appliesTo:"All Armor",stats:"12% Poison & Acid Resistance; 9% Vitality Resistance",faction:"Devil's Crossing",level:70,source:"base"},
+  {name:"Nightshade Powder",type:"aug-armor",appliesTo:"All Armor",stats:"7% Pierce Resistance; 10% Cold Resistance",faction:"Rovers",level:70,source:"base"},
+  {name:"Outcast's Elemental Scales",type:"aug-armor",appliesTo:"All Armor",stats:"10% Fire Resistance; 10% Cold Resistance",faction:"The Outcast",level:70,source:"base"},
+  {name:"Outcast's Skyguard Powder",type:"aug-armor",appliesTo:"All Armor",stats:"10% Cold Resistance; 10% Lightning Resistance",faction:"The Outcast",level:70,source:"base"},
+  {name:"Outcast's Warding Powder",type:"aug-armor",appliesTo:"All Armor",stats:"12% Aether Resistance",faction:"The Outcast",level:70,source:"base"},
+  {name:"Solarstorm Powder",type:"aug-armor",appliesTo:"All Armor",stats:"12% Fire Resistance; 12% Lightning Resistance",faction:"Homestead",level:70,source:"base"},
+  {name:"Spellward Powder",type:"aug-armor",appliesTo:"All Armor",stats:"10% Lightning Resistance; 7% Aether Resistance",faction:"Death's Vigil",level:70,source:"base"},
+  {name:"Spiritguard Powder",type:"aug-armor",appliesTo:"All Armor",stats:"10% Vitality Resistance",faction:"Death's Vigil",level:70,source:"base"},
+  {name:"Venomguard Powder",type:"aug-armor",appliesTo:"All Armor",stats:"18% Poison & Acid Resistance",faction:"Rovers",level:70,source:"base"},
+  {name:"Wraithtouch Powder",type:"aug-armor",appliesTo:"All Armor",stats:"15% Cold Resistance",faction:"Death's Vigil",level:70,source:"base"},
+  {name:"Bloodscale Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Bleeding Damage; +200 Health; +4% Health",faction:"Barrowholm",level:65,source:"aom"},
+  {name:"Potent Bloodscale Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Bleeding Damage; +440 Health; +8% Health",faction:"Barrowholm",level:65,source:"aom"},
+  {name:"Haunted Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Lightning/Aether/Electrocute Damage; 10% Reduced Stun Duration",faction:"Barrowholm",level:65,source:"aom"},
+  {name:"Potent Haunted Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Lightning/Aether/Electrocute Damage; 20% Reduced Stun Duration",faction:"Barrowholm",level:65,source:"aom"},
+  {name:"Hexxer's Kiss",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Fire/Chaos/Burn Damage; 15% Chance of 15% Reduced target Resistances for 5s",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Potent Hexxer's Kiss",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Fire/Chaos/Burn Damage; 30% Chance of 15% Reduced target Resistances for 5s",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Stardust",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Cold/Lightning/Frostburn/Electrocute Damage; +4% Health",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Potent Stardust",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Cold/Lightning/Frostburn/Electrocute Damage; +8% Health",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Blight Beast Pustules",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Acid/Poison Damage; +200 Health",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Potent Blight Beast Pustules",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Acid/Poison Damage; +440 Health",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Whipvine Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"10 Physical Damage; +40% Physical/Internal Trauma/Bleeding Damage",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Potent Whipvine Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"22 Physical Damage; +90% Physical/Internal Trauma/Bleeding Damage",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Imp Eye Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"10 Aether Damage; +40% Vitality/Aether/Vitality Decay Damage",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Potent Imp Eye Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"22 Aether Damage; +90% Vitality/Aether/Vitality Decay Damage",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Machinist Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Physical/Pierce/Internal Trauma Damage; Increases Armor by 5%",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Potent Machinist Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Physical/Pierce/Internal Trauma Damage; Increases Armor by 10%",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Void Tar",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Chaos Damage; +4% Health; Increases Armor by 5%",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Potent Void Tar",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Chaos Damage; +8% Health; Increases Armor by 10%",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Ravager's Breath",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"60 Poison Damage over 5s; +55% Pierce/Acid/Poison Damage; +250 Health",faction:"Barrowholm",level:90,source:"aom"},
+  {name:"Potent Ravager's Breath",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"125 Poison Damage over 5s; +120% Pierce/Acid/Poison Damage; +550 Health",faction:"Barrowholm",level:90,source:"aom"},
+  {name:"Ravager's Harvest",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"12 Vitality Damage; +55% Vitality/Bleeding/Vitality Decay Damage; +250 Health",faction:"Barrowholm",level:90,source:"aom"},
+  {name:"Potent Ravager's Harvest",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"25 Vitality Damage; +120% Vitality/Bleeding/Vitality Decay Damage; +550 Health",faction:"Barrowholm",level:90,source:"aom"},
+  {name:"Ravager's Rage",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"12 Fire Damage; +55% Fire/Aether/Burn Damage; 10% Vitality Resistance",faction:"Barrowholm",level:90,source:"aom"},
+  {name:"Potent Ravager's Rage",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"25 Fire Damage; +120% Fire/Aether/Burn Damage; 20% Vitality Resistance",faction:"Barrowholm",level:90,source:"aom"},
+  {name:"Coven's Bane",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+55% Acid/Vitality/Poison/Vitality Decay Damage; +1.2 Energy Regen/s; 10% Chaos Resistance",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Potent Coven's Bane",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+120% Acid/Vitality/Poison/Vitality Decay Damage; +2.4 Energy Regen/s; 20% Chaos Resistance",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Coven's Guile",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+55% Pierce/Cold/Frostburn Damage; +1.2 Energy Regen/s; 10% Elemental Resistance",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Potent Coven's Guile",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+120% Pierce/Cold/Frostburn Damage; +2.4 Energy Regen/s; 20% Elemental Resistance",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Coven's Terror",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+55% Physical/Chaos/Internal Trauma Damage; +250 Health; +4% Health",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Potent Coven's Terror",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+120% Physical/Chaos/Internal Trauma Damage; +550 Health; +8% Health",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Malmouth's Heart",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"12 Lightning Damage; +55% Fire/Lightning/Burn/Electrocute Damage; +250 Health",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Potent Malmouth's Heart",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"25 Lightning Damage; +120% Fire/Lightning/Burn/Electrocute Damage; +550 Health",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Malmouth's Redemption",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"12 Cold Damage; +55% Cold/Frostburn Damage; 10% Aether Resistance; Increases Armor by 5%",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Potent Malmouth's Redemption",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"25 Cold Damage; +120% Cold/Frostburn Damage; 20% Aether Resistance; Increases Armor by 10%",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Malmouth's Soul",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"12 Elemental Damage; +55% Aether/Elemental Damage; 10% Pierce Resistance",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Potent Malmouth's Soul",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"25 Elemental Damage; +120% Aether/Elemental Damage; 20% Pierce Resistance",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Malmouth's Will",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+55% Physical/Lightning/Internal Trauma/Electrocute Damage; +250 Health; 10% Vitality Resistance",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Potent Malmouth's Will",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+120% Physical/Lightning/Internal Trauma/Electrocute Damage; +550 Health; 20% Vitality Resistance",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Bloodrose Thorn",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"36 Bleeding Damage over 3s; +36% Pierce/Bleeding Damage",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Hexxer's Bloom",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Lightning/Aether/Electrocute Damage; 8% Reduced Petrify Duration; All Pets: +3% Offensive Ability",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Hexxer's Delight",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Elemental Damage; +200 Health; +25 Offensive Ability",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Magecap Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Fire/Cold/Burn/Frostburn Damage; 8% Reduced Freeze Duration",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Rotflesh Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Acid/Vitality/Poison/Vitality Decay Damage; 15% Life Leech Resistance; 15% Bleeding Resistance",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Void Tongue",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Vitality/Chaos/Vitality Decay Damage; 8% Reduced Stun Duration",faction:"Coven of Ugdenbog",level:65,source:"aom"},
+  {name:"Blazecore Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"36 Burn Damage over 3s; +36% Fire/Lightning/Burn/Electrocute Damage",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Colossus Spine",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+30 Physique; Increases Armor by 4%; Increases Armor Absorption by 2%",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Fleshwarp Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"60 Internal Trauma over 5s; +36% Physical/Aether/Internal Trauma Damage",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Mender's Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"All Pets: +10% Health; 20% Aether Resistance; 20% Chaos Resistance",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Nightsteel Polish",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"10 Piercing Damage; +36% Pierce/Cold/Frostburn Damage",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Void Ash",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"10 Chaos Damage; +36% Acid/Chaos/Poison Damage",faction:"Malmouth Resistance",level:65,source:"aom"},
+  {name:"Basilisk's Bite",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+50% Vitality/Bleeding/Vitality Decay Damage; +350 Health; 8% Reduced Stun Duration",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Basilisk's Gaze",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+50% Acid/Chaos/Poison Damage; Increases Armor by 8%; Increases Armor Absorption by 3%",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Heart of Ugdenbog",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"70 Internal Trauma over 5s; +6% Health; 8% Reduced Petrify Duration; +25% Shield Damage Blocked",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Skyshard Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"12 Lightning Damage; +50% Cold/Lightning/Frostburn/Electrocute Damage; +75 Offensive Ability",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Sylvarria's Essence",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+3% Offensive Ability; 15% Poison & Acid Resistance; All Pets: +4% Offensive Ability; 30% Poison & Acid Resistance",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Witch's Black Flame",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+50% Fire/Chaos/Burn Damage; +350 Health; 8% Reduced Stun Duration",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Wraith's Scream",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"12 Vitality Damage; +50% Cold/Vitality/Frostburn/Vitality Decay Damage; +75 Offensive Ability",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Arcane Heart Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"12 Fire Damage; +50% Fire/Aether/Burn Damage; +2% Offensive Ability",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Arcanum Dust",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+35% to All Damage; +70 Defensive Ability; +2.5 Energy Regen/s; 10% Elemental Resistance",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Forgefire",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"15 Elemental Damage; +50% Aether/Elemental Damage; +70 Defensive Ability",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Hammerfall Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"10 Pierce Damage; +50% Physical/Pierce/Internal Trauma Damage; +70 Defensive Ability",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Rotgut Venom",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+50% Acid/Poison Damage; +70 Defensive Ability; +2.5 Energy Regen/s; All Pets: +5% Attack Speed",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Steelbloom Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"10 Physical Damage; +50% Physical/Internal Trauma/Bleeding Damage; 2% Offensive Ability",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Typhoon Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+50% Pierce/Lightning/Electrocute Damage; +350 Health; +70 Defensive Ability",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Coven Black Ash",type:"aug-armor",appliesTo:"All Armor",stats:"10% Pierce Resistance; 10% Chaos Resistance",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Coven Bloodied Ash",type:"aug-armor",appliesTo:"All Armor",stats:"10% Bleeding Resistance; Increases Health Regeneration by 8%",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Coven Warding Powder",type:"aug-armor",appliesTo:"All Armor",stats:"9% Elemental Resistance",faction:"Coven of Ugdenbog",level:90,source:"aom"},
+  {name:"Malmouth Fortifying Powder",type:"aug-armor",appliesTo:"All Armor",stats:"8% Vitality Resistance; Increases Health Regeneration by 8%",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Malmouth Soulguard Powder",type:"aug-armor",appliesTo:"All Armor",stats:"10% Pierce Resistance; 10% Aether Resistance",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Malmouth Woundsear Powder",type:"aug-armor",appliesTo:"All Armor",stats:"10% Vitality Resistance; 10% Bleeding Resistance",faction:"Malmouth Resistance",level:90,source:"aom"},
+  {name:"Wendigo Bloodscent Powder",type:"aug-armor",appliesTo:"All Armor",stats:"15% Bleeding Resistance",faction:"Barrowholm",level:90,source:"aom"},
+  {name:"Wendigo Lifescent Powder",type:"aug-armor",appliesTo:"All Armor",stats:"4% Health",faction:"Barrowholm",level:90,source:"aom"},
+  {name:"Wendigo Soulscent Powder",type:"aug-armor",appliesTo:"All Armor",stats:"15% Vitality Resistance",faction:"Barrowholm",level:90,source:"aom"},
+  {name:"Gargoyle Scale",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"50 Internal Trauma over 5s; +40% Physical/Internal Trauma Damage; +25 Offensive Ability",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Potent Gargoyle Scale",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"110 Internal Trauma over 5s; +90% Physical/Internal Trauma Damage; +50 Offensive Ability",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Duskbloom",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Chaos Damage; +20 Defensive Ability; Increases Armor by 5%",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Potent Duskbloom",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Chaos Damage; +40 Defensive Ability; Increases Armor by 10%",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Gryphon Talon",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Vitality/Bleeding/Vitality Decay Damage; +4% Health",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Potent Gryphon Talon",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Vitality/Bleeding/Vitality Decay Damage; +8% Health",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Solael's Vision",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+55% Fire/Lightning/Burn/Electrocute Damage; +250 Health; 10% Vitality Resistance",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Potent Solael's Vision",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+120% Fire/Lightning/Burn/Electrocute Damage; +550 Health; 20% Vitality Resistance",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Solael's Voracity",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"12 Piercing Damage; +55% Pierce/Bleeding Damage; +250 Health",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Potent Solael's Voracity",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"25 Piercing Damage; +120% Pierce/Bleeding Damage; +550 Health",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Solael's Glare",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+55% Cold/Lightning/Frostburn/Electrocute Damage; +250 Health; 10% Pierce Resistance",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Potent Solael's Glare",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+120% Cold/Lightning/Frostburn/Electrocute Damage; +550 Health; 20% Pierce Resistance",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Korvan Sunpowder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"30 Burn Damage over 3s; +40% Physical/Fire/Internal Trauma/Burn Damage",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Potent Korvan Sunpowder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"60 Burn Damage over 3s; +90% Physical/Fire/Internal Trauma/Burn Damage",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Viper Venom",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"50 Poison Damage over 5s; +40% Cold/Acid/Frostburn/Poison Damage",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Potent Viper Venom",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"110 Poison Damage over 5s; +90% Cold/Acid/Frostburn/Poison Damage",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Sandclaw Fang",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"30 Bleeding Damage over 3s; +40% Bleeding Damage; All Pets: 12 Bleeding Dmg over 3s; +20% to All Damage",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Potent Sandclaw Fang",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"66 Bleeding Damage over 3s; +90% Bleeding Damage; All Pets: +45% to All Damage",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Korvan Cactus Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Acid/Vitality/Poison/Vitality Decay Damage; +200 Health",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Potent Korvan Cactus Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Acid/Vitality/Poison/Vitality Decay Damage; +440 Health",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Eldritch Bloom Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Elemental Damage; 10% Chaos Resistance; All Pets: 4 Elemental Dmg; +20% to All Damage",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Potent Eldritch Bloom Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Elemental Damage; 20% Chaos Resistance; All Pets: +45% to All Damage",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Scarabshell Powder",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+40% Lightning/Aether/Electrocute Damage; +25 Offensive Ability",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Potent Scarabshell Powder",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+90% Lightning/Aether/Electrocute Damage; +50 Offensive Ability",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Dreeg's Foresight",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"+55% Elemental Damage; +4% Health; +1.2 Energy Regen/s; 10% Chaos Resistance",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Potent Dreeg's Foresight",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"+120% Elemental Damage; +8% Health; +2.4 Energy Regen/s; 20% Chaos Resistance",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Dreeg's Spinedust",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"12 Acid Damage; +55% Acid/Poison Damage; +250 Health; 10% Bleeding Resistance",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Potent Dreeg's Spinedust",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"25 Acid Damage; +120% Acid/Poison Damage; +550 Health; 20% Bleeding Resistance",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Dreeg's Terror",type:"aug-weapon",appliesTo:"1H Weapons, Shields, Off-Hands",stats:"12 Chaos Damage; +55% Vitality/Chaos/Vitality Decay Damage; 10% Pierce Resistance",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Potent Dreeg's Terror",type:"aug-weapon",appliesTo:"2H Weapons only",stats:"25 Chaos Damage; +120% Vitality/Chaos/Vitality Decay Damage; 20% Pierce Resistance",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Gargoyle Fang",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Physical/Cold/Internal Trauma/Frostburn Damage; +20 Defensive Ability",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Sagethorn Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Pierce/Bleeding Damage; 15% Chaos Resistance",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Veilworm Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Aether Damage; 15% Poison & Acid Resistance",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Void Salt",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Fire/Chaos/Burn Damage; +20 Defensive Ability",faction:"Cult of Dreeg",level:65,source:"fg"},
+  {name:"Osyr's Temper",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"12 Chaos Damage; +50% Chaos Damage; +55 Offensive Ability; +50 Defensive Ability",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Osyr's Fortitude",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+350 Health; +25% Shield Damage Blocked; 104 Fire Retaliation; +25% to All Retaliation",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Osyr's Guidance",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+3% Offensive Ability; +1.5 Energy Regen/s; All Pets: +30% to All Damage; +5% Crit Damage",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Osyr's Wisdom",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+50% Elemental Damage; +3% Offensive Ability; 15% Vitality/Bleeding Resistance",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Sandclaw Scale",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+200 Health; 15% Aether Resistance; All Pets: +4% Crit Damage; +8% Health",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Viper Scale",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Pierce Damage; +200 Health; +20 Defensive Ability",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Cinderbark Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Fire/Lightning/Burn/Electrocute Damage; 15% Bleeding Resistance",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Rotvine Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Cold/Vitality/Frostburn/Vitality Decay Damage",faction:"Cult of Bysmiel",level:65,source:"fg"},
+  {name:"Ateph's Will",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+6% Health; Increases Armor by 8%; All Pets: +5% Attack Speed; 30% Bleeding Resistance",faction:"Cult of Bysmiel",level:90,source:"fg"},
+  {name:"Ateph's Glare",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"12 Cold Damage; +50% Cold/Frostburn Damage; +250 Health; +2% Defensive Ability",faction:"Cult of Bysmiel",level:90,source:"fg"},
+  {name:"Ateph's Command",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"42 Bleeding Damage over 3s; +50% Bleeding Damage; Increases Armor by 8%; 8% Reduced Stun Duration",faction:"Cult of Bysmiel",level:90,source:"fg"},
+  {name:"Ateph's Promise",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+50% Lightning Damage; +350 Health; +3% Defensive Ability; 8% Reduced Petrify Duration",faction:"Cult of Bysmiel",level:90,source:"fg"},
+  {name:"Desert Tongue",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"10 Chaos Damage; +36% Chaos Damage; All Pets: 4 Chaos Dmg; +18% to All Damage",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Scorpius Venom",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"10 Acid Damage; +36% Pierce/Acid/Poison Damage",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Keeper's Essence",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Elemental Damage; +20 Defensive Ability; Increases Armor by 4%",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Soulwarp Powder",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+36% Fire/Aether/Burn Damage; +20 Defensive Ability",faction:"Cult of Solael",level:65,source:"fg"},
+  {name:"Irrah's Soulfire",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"12 Aether Damage; +50% Fire/Aether/Burn Damage; +70 Defensive Ability",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Irrah's Patience",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+350 Health; +5% Health; Increases Armor by 6%; 8% Reduced Petrify Duration",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Irrah's Venomtongue",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"+50% Acid/Poison Damage; +70 Defensive Ability; All Pets: 30 Poison Dmg over 3s; +30% to All Damage",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Irrah's Blood",type:"aug-accessory",appliesTo:"Rings, Amulets",stats:"75 Vitality Decay over 5s; +50% Vitality/Vitality Decay Damage; +70 Defensive Ability; 15% Aether Resistance",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Solael's Bloodbinding",type:"aug-armor",appliesTo:"All Armor",stats:"+150 Health; +16 Defensive Ability",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Solael's Voidward",type:"aug-armor",appliesTo:"All Armor",stats:"15% Chaos Resistance",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Solael's Soulbinding",type:"aug-armor",appliesTo:"All Armor",stats:"10% Pierce Resistance; 10% Vitality Resistance",faction:"Cult of Solael",level:90,source:"fg"},
+  {name:"Bysmiel's Silversand",type:"aug-armor",appliesTo:"All Armor",stats:"+16 Defensive Ability; +16 Health Regen/s",faction:"Cult of Bysmiel",level:90,source:"fg"},
+  {name:"Bysmiel's Desert Barb",type:"aug-armor",appliesTo:"All Armor",stats:"15% Pierce Resistance",faction:"Cult of Bysmiel",level:90,source:"fg"},
+  {name:"Bysmiel's Veiltouch",type:"aug-armor",appliesTo:"All Armor",stats:"12% Poison & Acid Resistance; 10% Aether Resistance",faction:"Cult of Bysmiel",level:90,source:"fg"},
+  {name:"Dreeg's Omen",type:"aug-armor",appliesTo:"All Armor",stats:"+30 Defensive Ability",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Dreeg's Veilward",type:"aug-armor",appliesTo:"All Armor",stats:"+8% Constitution; 15% Aether Resistance",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Dreeg's Fiendblood",type:"aug-armor",appliesTo:"All Armor",stats:"12% Poison & Acid Resistance; 10% Chaos Resistance",faction:"Cult of Dreeg",level:90,source:"fg"},
+  {name:"Antivenom Salve",type:"comp-common",appliesTo:"All Armor",stats:"+10 Health Regen/s; +24 Armor; 20% Poison & Acid Resistance",faction:"Drop/Craft",level:15,source:"base"},
+  {name:"Ballistic Plating",type:"comp-common",appliesTo:"Chest Armor",stats:"+22 Defensive Ability; 10% Chance to Avoid Projectiles; +18 Armor",faction:"Drop/Craft",level:27,source:"base"},
+  {name:"Battered Shell",type:"comp-common",appliesTo:"Shields",stats:"+15 Physique; +10% Shield Block Chance; Shield Slam (skill)",faction:"Drop/Craft",level:1,source:"base"},
+  {name:"Bristly Fur",type:"comp-common",appliesTo:"All Armor",stats:"+90 Health; +25% Constitution",faction:"Drop/Craft",level:1,source:"base"},
+  {name:"Consecrated Wrappings",type:"comp-common",appliesTo:"Hand Armor",stats:"3-8 Chaos Damage; +8% Attack Speed; +8% Chaos Resistance",faction:"Drop/Craft",level:20,source:"base"},
+  {name:"Corpse Dust",type:"comp-common",appliesTo:"Rings",stats:"+4% Health; Increases Health Regen by 24%; 10% Vitality Resistance",faction:"Drop/Craft",level:7,source:"base"},
+  {name:"Dense Fur",type:"comp-common",appliesTo:"All Armor",stats:"+90 Health; +24 Armor; 20% Cold Resistance",faction:"Drop/Craft",level:15,source:"base"},
+  {name:"Ectoplasm",type:"comp-common",appliesTo:"Head Armor, Rings, Amulets, Medals",stats:"+20% Energy; +3 Energy Regen/s",faction:"Drop/Craft",level:7,source:"base"},
+  {name:"Frozen Heart",type:"comp-common",appliesTo:"Rings",stats:"+70 Health; 10% Cold Resistance; 21% Reduced Freeze/Petrify Duration",faction:"Drop/Craft",level:1,source:"base"},
+  {name:"Leathery Hide",type:"comp-common",appliesTo:"Head Armor",stats:"+6% Health; +32 Armor; 25% Reduced Stun Duration",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Mark of Illusions",type:"comp-common",appliesTo:"Rings",stats:"+15% Elemental Damage; +12 Spirit; +32 Defensive Ability; 2.5 Energy Regen/s",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Mark of the Traveler",type:"comp-common",appliesTo:"Foot Armor",stats:"+18 Health Regen/s; +8% Movement Speed; 15% Slow Resistance",faction:"Drop/Craft",level:20,source:"base"},
+  {name:"Molten Skin",type:"comp-common",appliesTo:"All Armor",stats:"+24 Armor; 20% Fire Resistance; 15% Reduction in Burn Duration",faction:"Drop/Craft",level:15,source:"base"},
+  {name:"Mutated Scales",type:"comp-common",appliesTo:"Shoulder, Chest, Leg, Hand Armor",stats:"+180 Health; +3% Health",faction:"Drop/Craft",level:15,source:"base"},
+  {name:"Polished Emerald",type:"comp-common",appliesTo:"Shields, Off-Hands, Rings, Head Armor, Chest Armor",stats:"+8 Physique; +8 Cunning; +8 Spirit",faction:"Drop/Craft",level:1,source:"base"},
+  {name:"Reinforced Shell",type:"comp-common",appliesTo:"Shields, Chest Armor, Shoulder Armor",stats:"+26 Defensive Ability; +24 Armor; 15% Pierce Resistance",faction:"Drop/Craft",level:15,source:"base"},
+  {name:"Restless Remains",type:"comp-common",appliesTo:"Hand Armor",stats:"3% Damage to Health; +220 Energy; +10% Casting Speed",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Rigid Shell",type:"comp-common",appliesTo:"All Armor",stats:"+10 Physique; +24 Armor; 20% Lightning Resistance",faction:"Drop/Craft",level:15,source:"base"},
+  {name:"Roiling Blood",type:"comp-common",appliesTo:"Rings",stats:"+8% Physical Damage; +18 Offensive Ability",faction:"Drop/Craft",level:1,source:"base"},
+  {name:"Rotten Heart",type:"comp-common",appliesTo:"Chest Armor",stats:"+25% Chaos/Poison Damage; +18 Offensive Ability; 75 Acid Retaliation",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Runestone",type:"comp-common",appliesTo:"Head Armor",stats:"+18 Armor; 12% Aether/Elemental Resistance; +8% Damage to Aetherials",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Sanctified Bone",type:"comp-common",appliesTo:"Chest Armor, Head Armor",stats:"18% Vitality Resistance; 12% Chaos Resistance; +8% Damage to Undead/Chthonics",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Scaled Hide",type:"comp-common",appliesTo:"Shoulder, Chest, Leg Armor",stats:"+35 Armor; Increases Armor Absorption by 20%",faction:"Drop/Craft",level:7,source:"base"},
+  {name:"Scavenged Plating",type:"comp-common",appliesTo:"All Armor",stats:"+15 Armor",faction:"Drop/Craft",level:1,source:"base"},
+  {name:"Serrated Shell",type:"comp-common",appliesTo:"Shields",stats:"-20% Shield Recovery Time; 136 Physical Retaliation; +20% to All Retaliation; Brutal Shield Slam (skill)",faction:"Drop/Craft",level:20,source:"base"},
+  {name:"Silk Swatch",type:"comp-common",appliesTo:"Shoulder, Chest, Leg Armor",stats:"18% Pierce Resistance; 18% Bleeding Resistance",faction:"Drop/Craft",level:7,source:"base"},
+  {name:"Soul Shard",type:"comp-common",appliesTo:"Rings",stats:"+12% Vitality/Vitality Decay Damage; +30% Energy from Enemy Spells; 25% Energy Leech Resistance; 20% Vitality Resistance",faction:"Drop/Craft",level:20,source:"base"},
+  {name:"Spined Carapace",type:"comp-common",appliesTo:"All Armor",stats:"24 Armor; 55 Physical Retaliation; +12% to All Retaliation",faction:"Drop/Craft",level:20,source:"base"},
+  {name:"Aether Soul",type:"comp-common",appliesTo:"Amulets",stats:"+10% Aether Damage; +30 Defensive Ability; 16% Aether Resistance; 6% Less Damage from Aetherials",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Black Tallow",type:"comp-common",appliesTo:"Amulets",stats:"+10% Chaos Damage; +30 Defensive Ability; 16% Chaos Resistance; 6% Less Damage from Chthonics",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Focusing Prism",type:"comp-common",appliesTo:"Amulets",stats:"+5% Crit Damage; +18 Spirit; -10% Skill Energy Cost",faction:"Drop/Craft",level:27,source:"base"},
+  {name:"Wardstone",type:"comp-common",appliesTo:"Amulets",stats:"+6% Movement Speed; 18% Elemental/Bleeding Resistance",faction:"Drop/Craft",level:7,source:"base"},
+  {name:"Vicious Jawbone",type:"comp-common",appliesTo:"Amulets",stats:"+15% Physical/Internal Trauma Damage; +12 Cunning; +5% Attack Speed",faction:"Drop/Craft",level:27,source:"base"},
+  {name:"Ancient Armor Plate",type:"comp-rare",appliesTo:"Chest Armor, Leg Armor",stats:"+18 Physique; +35 Armor; Increases Armor by 8%; Increases Armor Absorption by 8%",faction:"Drop/Craft",level:15,source:"base"},
+  {name:"Arcane Lens",type:"comp-rare",appliesTo:"Amulets",stats:"5-10 Elemental Damage; +25% Elemental Damage; +3% Spirit; +40 Defensive Ability; -6% Skill Energy Cost",faction:"Drop/Craft",level:27,source:"base"},
+  {name:"Arcane Spark",type:"comp-rare",appliesTo:"Amulets",stats:"45 Energy Leech over 3s; Increases Energy Regen by 20%; +50 Offensive Ability; 30% Skill Disruption Protection",faction:"Drop/Craft",level:35,source:"base"},
+  {name:"Attuned Lodestone",type:"comp-rare",appliesTo:"Amulets",stats:"+5% Crit Damage; +20% Lightning/Electrocute Damage; +32 Offensive Ability; Lightning Retaliation; Static Charge (skill)",faction:"Drop/Craft",level:15,source:"base"},
+  {name:"Bindings of Bysmiel",type:"comp-rare",appliesTo:"Chest Armor",stats:"+20% to All Damage; +25 Defensive Ability; +1 Energy Regen/s; Bysmiel's Binding (skill)",faction:"Drop/Craft",level:27,source:"base"},
+  {name:"Bloody Whetstone",type:"comp-rare",appliesTo:"Axes, Swords, Guns, Crossbows",stats:"30 Bleeding over 3s; +5% Crit Damage; +30% Bleeding; Decapitate (skill)",faction:"Drop/Craft",level:27,source:"base"},
+  {name:"Chains of Oleron",type:"comp-rare",appliesTo:"Chest Armor",stats:"+30 Offensive Ability; +2% Offensive Ability; +6% Movement Speed; 24% Reduced Entrapment Duration",faction:"Drop/Craft",level:27,source:"base"},
+  {name:"Dread Skull",type:"comp-rare",appliesTo:"Amulets",stats:"+24% Pierce Damage; +8% Vitality Damage; +30% Bleeding; +5% Total Speed",faction:"Drop/Craft",level:32,source:"base"},
+  {name:"Hallowed Ground",type:"comp-rare",appliesTo:"Chest Armor",stats:"+25 Defensive Ability; +2% Defensive Ability; +30 Health Regen/s; 12% Elemental Resistance",faction:"Drop/Craft",level:32,source:"base"},
+  {name:"Haunted Steel",type:"comp-rare",appliesTo:"All Weapons",stats:"8 Vitality Damage; +25% Vitality/Vitality Decay Damage; 10% Physical to Vitality; 8% Attack Damage to Health; Bloodthirster (skill)",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Kilrian's Shattered Soul",type:"comp-rare",appliesTo:"Chest Armor",stats:"+40% Fire/Burn/Vitality/Vitality Decay Damage; +5% Attack Speed; 20% Vitality Resistance; Kilrian's Flame (skill)",faction:"Drop/Craft",level:24,source:"base"},
+  {name:"Mark of Mogdrogen",type:"comp-rare",appliesTo:"Foot Armor",stats:"+5% Health; +15 Health Regen/s; Increases Health Regen by 10%; +10% Movement Speed",faction:"Drop/Craft",level:27,source:"base"},
+  {name:"Mark of the Myrmidon",type:"comp-rare",appliesTo:"Shields",stats:"+120 Health; +25 Defensive Ability; -15% Shield Recovery Time; 180 Physical Retaliation; Blade Barrier (skill)",faction:"Drop/Craft",level:27,source:"base"},
+  {name:"Oleron's Blood",type:"comp-rare",appliesTo:"All Weapons",stats:"+25% Physical Damage; +40% Internal Trauma Damage; +24 Offensive Ability; +2% Total Speed; Oleron's Might (skill)",faction:"Drop/Craft",level:30,source:"base"},
+  {name:"Prismatic Diamond",type:"comp-rare",appliesTo:"Head Armor",stats:"+4% Health; 15% Vitality Resistance; 20% Energy from Enemy Spells; Prismatic Rage (skill)",faction:"Drop/Craft",level:55,source:"base"},
+  {name:"Shard of Beronath",type:"comp-rare",appliesTo:"All Weapons",stats:"+18% to All Damage; 8 Elemental Damage; +32 Offensive Ability; 10% Physical to Elemental; Beronath's Fury (skill)",faction:"Drop/Craft",level:45,source:"base"},
+  {name:"Symbol of Solael",type:"comp-rare",appliesTo:"All Weapons",stats:"2-12 Chaos Damage; +35% Chaos Damage; 10% Physical to Chaos; +33% Energy from Enemy Spells; Solael's Flame (skill)",faction:"Drop/Craft",level:35,source:"base"},
+  {name:"Bladed Plating",type:"comp-common",appliesTo:"All Armor",stats:"+120 Health; +24 Offensive Ability; +30% to All Retaliation Damage",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Blazing Ruby",type:"comp-common",appliesTo:"Amulets",stats:"+160 Health; +4% Health; 15% Slow Resistance; 160 Fire Retaliation; +16% to All Retaliation",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Bloodied Crystal",type:"comp-common",appliesTo:"Rings",stats:"+40 Defensive Ability; +75 Armor; 15% Bleeding Resistance",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Enchanted Earth",type:"comp-common",appliesTo:"All Armor",stats:"+4% Health; +24 Health Regen/s; Increases Armor by 4%",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Runebound Topaz",type:"comp-common",appliesTo:"Rings",stats:"+160 Health; +52 Defensive Ability; 10% Reduced Stun Duration; +8% Shield Damage Blocked",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Spellscorched Plating",type:"comp-common",appliesTo:"All Armor",stats:"+100 Health; +20% Pierce Resistance; 15% Elemental Resistance",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Tainted Heart",type:"comp-common",appliesTo:"Amulets",stats:"+5% Crit Damage; +15 Offensive Ability; 12% Vitality Resistance; 12% Aether Resistance",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Ugdenbog Leather",type:"comp-common",appliesTo:"All Armor",stats:"+30 Defensive Ability; 20% Poison & Acid Resistance; 20% Bleeding Resistance",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Eldritch Mirror",type:"comp-rare",appliesTo:"Head Armor, Chest Armor",stats:"+5% Attack/Casting Speed; 10% Vitality Resistance; Eldritch Binding (skill)",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Living Armor",type:"comp-rare",appliesTo:"Head, Shoulder, Chest Armor",stats:"+35 Offensive Ability; Increases Armor Absorption by 12%; 8% Chaos Resistance; 10% Elemental Resistance",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Sacred Plating",type:"comp-rare",appliesTo:"Head, Shoulder, Chest Armor",stats:"+210 Health; Increases Armor Absorption by 12%; 14% Vitality Resistance; 18% Aether Resistance",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Seal of Ancestry",type:"comp-rare",appliesTo:"Amulets",stats:"+5% Health; +1.5 Energy Regen/s; Increases Energy Regen by 10%; 20% Vitality Resistance; Ancestral Ward (skill)",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Seal of Annihilation",type:"comp-rare",appliesTo:"Amulets",stats:"+20 Spirit; +5% Attack/Casting Speed; -10% Skill Energy Cost; Annihilation (15% on Crit)",faction:"Drop/Craft",level:75,source:"aom"},
+  {name:"Titan Plating",type:"comp-rare",appliesTo:"Head Armor, Chest Armor",stats:"+4% Physique; 24% Pierce Resistance; +33% Reflected Damage Reduction; Increases Armor by 12%",faction:"Drop/Craft",level:75,source:"aom"},
+];
+
+let activeTags = [];
+
+function buildChips() {
+  const c = document.getElementById('quickChips');
+  c.innerHTML = QUICK_STATS.map(s =>
+    `<button class="chip" onclick="toggleChip(this,'${s}')">${s}</button>`
+  ).join('');
+}
+
+function toggleChip(el, stat) {
+  const idx = activeTags.indexOf(stat);
+  if (idx === -1) { activeTags.push(stat); el.classList.add('active'); }
+  else { activeTags.splice(idx,1); el.classList.remove('active'); }
+  renderTags();
+  doSearch();
+}
+
+function renderTags() {
+  const r = document.getElementById('tagRow');
+  if (activeTags.length === 0) {
+    r.innerHTML = '<span style="font-size:12px;color:var(--color-text-tertiary);">None</span>';
+    return;
+  }
+  r.innerHTML = activeTags.map(t =>
+    `<button class="tag" onclick="removeTag('${t}')"><i class="ti ti-x" aria-hidden="true"></i>${t}</button>`
+  ).join('');
+}
+
+function removeTag(stat) {
+  activeTags = activeTags.filter(t => t !== stat);
+  document.querySelectorAll('.chip').forEach(el => {
+    if (el.textContent === stat) el.classList.remove('active');
+  });
+  renderTags();
+  doSearch();
+}
+
+function clearAll() {
+  activeTags = [];
+  document.getElementById('searchInput').value = '';
+  document.getElementById('typeFilter').value = '';
+  document.getElementById('slotFilter').value = '';
+  document.getElementById('sourceFilter').value = '';
+  document.getElementById('levelFilter').value = '';
+  document.querySelectorAll('.chip').forEach(el => el.classList.remove('active'));
+  renderTags();
+  doSearch();
+}
+
+const SLOT_KEYWORDS = {
+  weapon: ['weapon','gun','crossbow','melee','axe','sword','mace','dagger'],
+  ring: ['ring'], amulet: ['amulet'], head: ['head'],
+  chest: ['chest'], shoulder: ['shoulder'], legs: ['leg'],
+  hands: ['hand'], feet: ['foot','feet','boot'], belt: ['belt'],
+  shield: ['shield'], medal: ['medal']
+};
+
+function matchesSlot(item, slot) {
+  if (!slot) return true;
+  const t = (item.appliesTo || '').toLowerCase();
+  if (slot === 'weapon') return t.includes('weapon') || t.includes('gun') || t.includes('crossbow') || t.includes('melee') || t.includes('axe') || t.includes('sword');
+  return SLOT_KEYWORDS[slot].some(k => t.includes(k));
+}
+
+function highlightMatch(text, terms) {
+  if (!terms.length) return text;
+  let result = text;
+  terms.forEach(term => {
+    if (!term) return;
+    const re = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+    result = result.replace(re, '<span class="match-stat">$1</span>');
+  });
+  return result;
+}
+
+const TYPE_LABELS = {
+  'aug-weapon': ['Augment – Weapon', 'badge-aug-weapon'],
+  'aug-accessory': ['Augment – Accessory', 'badge-aug-accessory'],
+  'aug-armor': ['Augment – Armor', 'badge-aug-armor'],
+  'comp-common': ['Component – Common', 'badge-comp-common'],
+  'comp-rare': ['Component – Rare', 'badge-comp-rare'],
+};
+const SOURCE_LABELS = {base:'Base Game', aom:'Ashes of Malmouth', fg:'Forgotten Gods'};
+
+function doSearch() {
+  const rawQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+  const typeF = document.getElementById('typeFilter').value;
+  const slotF = document.getElementById('slotFilter').value;
+  const sourceF = document.getElementById('sourceFilter').value;
+  const levelF = parseInt(document.getElementById('levelFilter').value) || 0;
+
+  const queryTerms = rawQuery ? rawQuery.split(/\s+/) : [];
+  const allTerms = [...queryTerms, ...activeTags.map(t => t.toLowerCase())];
+
+  let results = ALL_ITEMS.filter(item => {
+    if (typeF && item.type !== typeF) return false;
+    if (sourceF && item.source !== sourceF) return false;
+    if (levelF && item.level < levelF) return false;
+    if (!matchesSlot(item, slotF)) return false;
+    if (allTerms.length === 0) return true;
+    const haystack = (item.name + ' ' + item.stats + ' ' + item.faction + ' ' + item.appliesTo).toLowerCase();
+    return allTerms.every(t => haystack.includes(t));
+  });
+
+  results.sort((a,b) => a.level - b.level || a.name.localeCompare(b.name));
+
+  const meta = document.getElementById('resultsMeta');
+  meta.textContent = results.length === ALL_ITEMS.length
+    ? `Showing all ${ALL_ITEMS.length} items`
+    : `${results.length} result${results.length !== 1 ? 's' : ''} found`;
+
+  const tbody = document.getElementById('resultsBody');
+  if (results.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-results"><i class="ti ti-mood-sad" aria-hidden="true" style="font-size:24px;display:block;margin-bottom:8px"></i>No items match your search</td></tr>';
+    return;
+  }
+
+  const hlTerms = allTerms;
+  let lastType = null;
+  tbody.innerHTML = results.map(item => {
+    const [typeLabel, badgeClass] = TYPE_LABELS[item.type];
+    let divider = '';
+    if (item.type !== lastType) {
+      lastType = item.type;
+      divider = `<tr><td colspan="6" class="section-divider">${typeLabel}</td></tr>`;
+    }
+    const src = SOURCE_LABELS[item.source] || item.source;
+    const factionSrc = item.faction !== 'Drop/Craft' ? `${item.faction} <span style="color:var(--color-text-tertiary);">(${src})</span>` : `<span style="color:var(--color-text-tertiary);">${src} – Drop/Craft</span>`;
+    return `${divider}<tr>
+      <td style="font-weight:500;white-space:nowrap">${highlightMatch(item.name, hlTerms)}</td>
+      <td><span class="badge ${badgeClass}">${typeLabel}</span></td>
+      <td style="font-size:12px;color:var(--color-text-secondary)">${highlightMatch(item.appliesTo, hlTerms)}</td>
+      <td style="font-size:12px">${highlightMatch(item.stats, hlTerms)}</td>
+      <td style="font-size:12px">${factionSrc}</td>
+      <td style="text-align:center;font-size:12px;color:var(--color-text-secondary)">${item.level}</td>
+    </tr>`;
+  }).join('');
+}
+
+buildChips();
+doSearch();
+</script>
